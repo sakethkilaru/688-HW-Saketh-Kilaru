@@ -24,8 +24,7 @@ if prompt := st.chat_input("What is up?"):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # keep only last 2 user messages (and their responses)
-    # → effectively last 4 messages total
+    # keep only last 2 user messages 
     user_msgs = [m for m in st.session_state.messages if m["role"] == "user"]
     if len(user_msgs) > 2:
         # find index of the 2nd-to-last user message
