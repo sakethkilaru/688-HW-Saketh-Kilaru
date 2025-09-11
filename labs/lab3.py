@@ -39,7 +39,6 @@ if prompt := st.chat_input("What is up?"):
             if count == 2:
                 cutoff_index = i
                 break
-        # truncate messages before cutoff_index
         st.session_state.messages = st.session_state.messages[cutoff_index:]
     
     # reply
