@@ -8,8 +8,8 @@ from openai import OpenAI
 import chromadb
 import fitz  # PyMuPDF
 
-# ---- Lab 4A ----
-st.title("Lab 4A – ChromaDB with OpenAI Embeddings (Upload PDFs)")
+# ---- Lab 4B ----
+st.title("Lab 4B – Course Information Chatbot (RAG)")
 
 # Initialize OpenAI client once
 if "openai_client" not in st.session_state:
@@ -63,7 +63,7 @@ def create_lab4_vectordb(uploaded_files):
 
 # ---- File uploader ----
 uploaded_files = st.file_uploader(
-    "Upload your 7 PDF files",
+    "Upload your 7 course PDF files",
     type="pdf",
     accept_multiple_files=True
 )
@@ -76,23 +76,69 @@ if uploaded_files:
         collection = st.session_state.Lab4_vectorDB
         st.write("Using cached ChromaDB collection")
 
-    # ---- Test queries ----
-    test_queries = ["Generative AI", "Text Mining", "Data Science Overview"]
-    st.subheader("Test Queries")
+    # ---- Conversational Chatbot ----
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
-    openai_client = st.session_state.openai_client
-    for query in test_queries:
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # User input
+    if prompt := st.chat_input("Ask me something about the course..."):
+        # Add user msg
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        # ---- Step 1: Embed query & search ChromaDB ----
+        openai_client = st.session_state.openai_client
         response = openai_client.embeddings.create(
-            input=query,
+            input=prompt,
             model="text-embedding-3-small"
         )
         query_embedding = response.data[0].embedding
-
         results = collection.query(query_embeddings=[query_embedding], n_results=3)
 
-        st.write(f"### Results for: `{query}`")
-        for i, doc_id in enumerate(results["ids"][0]):
-            st.write(f"{i+1}. {doc_id}")
-        st.markdown("---")
+        # Retrieved documents
+        retrieved_docs = results["documents"][0]
+        retrieved_ids = results["ids"][0]
+
+        # Build context for LLM
+        context_text = "\n\n".join(
+            [f"From {doc_id}:\n{doc[:1000]}"  # truncate to avoid token overflow
+             for doc, doc_id in zip(retrieved_docs, retrieved_ids)]
+        )
+
+        # ---- Step 2: Build system prompt for RAG ----
+        system_prompt = f"""
+        You are a helpful Course Information Assistant.
+        Always check the retrieved course documents for answers.
+        If relevant context is found, use it and say:
+        "According to the course materials..."
+        If nothing relevant is found, clearly say:
+        "I could not find this in the uploaded materials, but here is what I know..."
+        
+        Retrieved context:
+        {context_text}
+        """
+
+        # ---- Step 3: Call LLM ----
+        with st.chat_message("assistant"):
+            messages_with_context = [
+                {"role": "system", "content": system_prompt},
+                *st.session_state.messages
+            ]
+            stream = openai_client.chat.completions.create(
+                model="gpt-5-nano",  
+                messages=messages_with_context,
+                stream=True,
+            )
+            response_text = st.write_stream(stream)
+
+        # Save assistant reply
+        st.session_state.messages.append({"role": "assistant", "content": response_text})
+
 else:
-    st.info("upload your 7 PDF files to build the vector database.")
+    st.info("Please upload your 7 PDF files to build the course knowledge base.")
