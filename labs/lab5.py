@@ -75,7 +75,7 @@ def get_clothing_suggestion(weather):
 # ----------------------
 # STREAMLIT UI
 # ----------------------
-API_KEY = st.secrets["openweather"]["API_KEY"]
+API_KEY = st.secrets["openweather_API_KEY"]
 
 city = st.text_input("Enter a city (default = Syracuse, NY):")
 
